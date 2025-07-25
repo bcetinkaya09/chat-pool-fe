@@ -12,10 +12,12 @@ interface ChatProps {
 export default function Chat({ username, room, theme }: ChatProps) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<
-    { user: { username: string; id: string }; text: string; type?: string; time?: string }[]
+    { user: { username: string; id: string }; text: string; type?: string; time?: string; id?: string }[]
   >([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [userId, setUserId] = useState<string>("");
+  // Seçili mesajı tutmak için state
+  const [selectedMessageIndex, setSelectedMessageIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!username || !room) return;
@@ -25,8 +27,14 @@ export default function Chat({ username, room, theme }: ChatProps) {
       user: { username: string; id: string };
       text: string;
       type?: string;
+      time?: string;
+      id?: string;
     }) => {
       setMessages((prev) => [...prev, data]);
+    };
+
+    const allMessagesHandler = (msgs: typeof messages) => {
+      setMessages(msgs);
     };
 
     const usersHandler = (users: string[]) => {
@@ -38,10 +46,12 @@ export default function Chat({ username, room, theme }: ChatProps) {
     });
 
     socket.on("message", messageHandler);
+    socket.on("allMessages", allMessagesHandler);
     socket.on("onlineUsers", usersHandler);
 
     return () => {
       socket.off("message", messageHandler);
+      socket.off("allMessages", allMessagesHandler);
       socket.off("onlineUsers", usersHandler);
     };
   }, [username, room]);
@@ -50,6 +60,19 @@ export default function Chat({ username, room, theme }: ChatProps) {
     if (message.trim()) {
       socket.emit("chatMessage", message);
       setMessage("");
+      setSelectedMessageIndex(null); // Mesaj gönderilince seçimi kaldır
+    }
+  };
+
+  // Mesajı silmek için fonksiyon
+  const deleteMessage = () => {
+    if (selectedMessageIndex !== null) {
+      const msg = messages[selectedMessageIndex];
+      if (msg && msg.id) {
+        socket.emit("deleteMessage", { room, messageId: msg.id });
+      }
+      setMessage("");
+      setSelectedMessageIndex(null);
     }
   };
 
@@ -97,7 +120,22 @@ export default function Chat({ username, room, theme }: ChatProps) {
 
         {/* Chat Container */}
         <div className={`md:w-3/4 flex flex-col p-4 rounded-lg ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"}`}>
-          <h2 className={`text-xl mb-3 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Sohbet</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className={`text-xl ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Sohbet</h2>
+            {/* Sil butonu sağ üstte, sadece kendi mesajım seçiliyse */}
+            {selectedMessageIndex !== null && messages[selectedMessageIndex]?.user.id === userId && (
+              <button
+                onClick={deleteMessage}
+                className={`flex items-center gap-2 px-3 py-1 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold shadow-md transition-transform duration-150 hover:scale-105 hover:from-red-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-red-400 ml-2`}
+                title="Mesajı sil"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m5 0H6" />
+                </svg>
+                Sil
+              </button>
+            )}
+          </div>
           <div
             id="chat-container"
             className={`flex-grow h-64 overflow-y-auto p-3 rounded ${theme === "dark" ? "bg-gray-800" : "bg-white"}`}
@@ -119,6 +157,12 @@ export default function Chat({ username, room, theme }: ChatProps) {
                     ? "text-right"
                     : "text-left"
                 }`}
+                onClick={() => {
+                  if (msg.user.id === userId) {
+                    setSelectedMessageIndex(index);
+                  }
+                }}
+                style={{ cursor: msg.user.id === userId ? "pointer" : "default" }}
               >
                 {msg.type === "system" ? (
                   <span className={`italic ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
@@ -130,7 +174,7 @@ export default function Chat({ username, room, theme }: ChatProps) {
                 ) : (
                   <>
                     {msg.user.id === userId ? (
-                      <span className={`rounded-lg p-2 ml-auto ${theme === "dark" ? "bg-blue-500" : "bg-blue-400"}`}>
+                      <span className={`rounded-lg p-2 ml-auto ${theme === "dark" ? "bg-blue-500" : "bg-blue-400"} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
                         {msg.text}
                         {msg.time && (
                           <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
@@ -139,7 +183,7 @@ export default function Chat({ username, room, theme }: ChatProps) {
                     ) : (
                       <div className="flex flex-col items-start">
                         <strong>{msg.user.username}</strong>
-                        <span className={`rounded-lg p-2 mt-1 ${theme === "dark" ? "bg-gray-600" : "bg-gray-300"}`}>
+                        <span className={`rounded-lg p-2 mt-1 ${theme === "dark" ? "bg-gray-600" : "bg-gray-300"} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
                           {msg.text}
                           {msg.time && (
                             <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
@@ -157,14 +201,17 @@ export default function Chat({ username, room, theme }: ChatProps) {
               type="text"
               placeholder="Mesajınızı yazın..."
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => {
+                setMessage(e.target.value);
+                setSelectedMessageIndex(null); // Manuel değişiklikte seçimi kaldır
+              }}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
                   sendMessage();
                 }
               }}
-              className={`flex-grow p-2 rounded outline-none ${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900 border border-gray-300"}`}
+              className={`flex-grow p-2 rounded outline-none transition-all duration-150 ${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900 border border-gray-300"}`}
             />
             <button
               onClick={sendMessage}

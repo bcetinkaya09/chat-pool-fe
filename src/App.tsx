@@ -3,6 +3,7 @@ import Chat from "./components/Chat";
 
 export default function App() {
   const [username, setUsername] = useState("");
+  const [room, setRoom] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState("");
   const [theme, setTheme] = useState(() => {
@@ -10,12 +11,16 @@ export default function App() {
   });
 
   const joinChat = () => {
-    if (username.trim()) {
-      setIsLoggedIn(true);
-      setError("");
-    } else {
+    if (!username.trim()) {
       setError("Lütfen geçerli bir isim girin!");
+      return;
     }
+    if (!room.trim()) {
+      setError("Lütfen bir oda adı girin!");
+      return;
+    }
+    setIsLoggedIn(true);
+    setError("");
   };
 
   const toggleTheme = () => {
@@ -49,13 +54,20 @@ export default function App() {
       />
       {!isLoggedIn ? (
         <div className={`${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900"} p-6 rounded-lg shadow-lg w-full max-w-sm`}>
-          <h2 className="text-xl mb-3 text-center">İsminizi Girin</h2>
+          <h2 className="text-xl mb-3 text-center">İsminizi ve Oda Adını Girin</h2>
 
           <input
             type="text"
             placeholder="İsminiz"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
+            className={`w-full p-2 mb-3 rounded outline-none ${theme === "dark" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900"}`}
+          />
+          <input
+            type="text"
+            placeholder="Oda adı (örn: genel, yazılım, oyun...)"
+            value={room}
+            onChange={(e) => setRoom(e.target.value)}
             className={`w-full p-2 mb-3 rounded outline-none ${theme === "dark" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900"}`}
           />
 
@@ -69,7 +81,7 @@ export default function App() {
           </button>
         </div>
       ) : (
-        <Chat username={username} theme={theme} />
+        <Chat username={username} room={room} theme={theme} />
       )}
     </div>
   );

@@ -5,10 +5,11 @@ const socket = io(import.meta.env.VITE_SOCKET_URL);
 
 interface ChatProps {
   username: string;
+  room: string;
   theme: string;
 }
 
-export default function Chat({ username, theme }: ChatProps) {
+export default function Chat({ username, room, theme }: ChatProps) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<
     { user: { username: string; id: string }; text: string; type?: string }[]
@@ -17,7 +18,8 @@ export default function Chat({ username, theme }: ChatProps) {
   const [userId, setUserId] = useState<string>("");
 
   useEffect(() => {
-    socket.emit("join", username);
+    if (!username || !room) return;
+    socket.emit("joinRoom", { username, room });
 
     const messageHandler = (data: {
       user: { username: string; id: string };
@@ -42,7 +44,7 @@ export default function Chat({ username, theme }: ChatProps) {
       socket.off("message", messageHandler);
       socket.off("onlineUsers", usersHandler);
     };
-  }, [username]);
+  }, [username, room]);
 
   const sendMessage = () => {
     if (message.trim()) {

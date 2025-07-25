@@ -1,7 +1,5 @@
 import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
-
-const socket = io(import.meta.env.VITE_SOCKET_URL);
+import socket from "../socket";
 
 interface ChatProps {
   username: string;
@@ -147,54 +145,59 @@ export default function Chat({ username, room, theme }: ChatProps) {
                   : "#e5e7eb #d1d5db",
             }}
           >
-            {messages.map((msg, index) => (
-              <p
-                key={index}
-                className={`mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"} ${
-                  msg.type === "system"
-                    ? "text-center"
-                    : msg.user.id === userId
-                    ? "text-right"
-                    : "text-left"
-                }`}
-                onClick={() => {
-                  if (msg.user.id === userId) {
-                    setSelectedMessageIndex(index);
-                  }
-                }}
-                style={{ cursor: msg.user.id === userId ? "pointer" : "default" }}
-              >
-                {msg.type === "system" ? (
-                  <span className={`italic ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-                    {msg.text}
-                    {msg.time && (
-                      <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
-                    )}
-                  </span>
-                ) : (
-                  <>
-                    {msg.user.id === userId ? (
-                      <span className={`rounded-lg p-2 ml-auto ${theme === "dark" ? "bg-blue-500" : "bg-blue-400"} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
-                        {msg.text}
-                        {msg.time && (
-                          <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
-                        )}
-                      </span>
-                    ) : (
-                      <div className="flex flex-col items-start">
-                        <strong>{msg.user.username}</strong>
-                        <span className={`rounded-lg p-2 mt-1 ${theme === "dark" ? "bg-gray-600" : "bg-gray-300"} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
-                          {msg.text}
-                          {msg.time && (
-                            <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
-                          )}
-                        </span>
-                      </div>
-                    )}
-                  </>
-                )}
-              </p>
-            ))}
+            {messages.map((msg, index) => {
+              // msg.user veya msg.user.id undefined ise hata olmasın
+              const isOwn = msg.user && msg.user.id === userId;
+              const isSystem = msg.type === "system";
+              // <p> içinde <div> kullanmak yerine, koşullu olarak farklı elementler döndür
+              if (isSystem) {
+                return (
+                  <p
+                    key={index}
+                    className={`mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"} text-center`}
+                  >
+                    <span className={`italic ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                      {msg.text}
+                      {msg.time && (
+                        <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
+                      )}
+                    </span>
+                  </p>
+                );
+              } else if (isOwn) {
+                return (
+                  <div
+                    key={index}
+                    className={`mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"} text-right`}
+                    onClick={() => setSelectedMessageIndex(index)}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <span className={`rounded-lg p-2 ml-auto ${theme === "dark" ? "bg-blue-500" : "bg-blue-400"} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
+                      {msg.text}
+                      {msg.time && (
+                        <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              } else {
+                return (
+                  <div
+                    key={index}
+                    className={`mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"} text-left`}
+                    style={{ cursor: "default" }}
+                  >
+                    <strong>{msg.user?.username}</strong>
+                    <span className={`rounded-lg p-2 mt-1 block ${theme === "dark" ? "bg-gray-600" : "bg-gray-300"} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
+                      {msg.text}
+                      {msg.time && (
+                        <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
+                      )}
+                    </span>
+                  </div>
+                );
+              }
+            })}
           </div>
           <div className="mt-3 flex">
             <input

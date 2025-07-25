@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import Chat from "./components/Chat";
-import { io } from "socket.io-client";
-
-const socket = io(import.meta.env.VITE_SOCKET_URL);
+import socket from "./socket";
 
 export default function App() {
   const [username, setUsername] = useState("");

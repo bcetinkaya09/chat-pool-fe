@@ -7,7 +7,6 @@ const socket = io(import.meta.env.VITE_SOCKET_URL);
 export default function App() {
   const [username, setUsername] = useState("");
   const [room, setRoom] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState("");
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem("theme") || "dark";
@@ -39,7 +38,6 @@ export default function App() {
 
   const handleRoomSelect = (selectedRoom: string) => {
     setRoom(selectedRoom);
-    setIsLoggedIn(true);
     setStep("chat");
   };
 
@@ -49,7 +47,6 @@ export default function App() {
       return;
     }
     setRoom(newRoom);
-    setIsLoggedIn(true);
     setStep("chat");
     setError("");
   };

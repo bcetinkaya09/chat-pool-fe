@@ -79,9 +79,7 @@ export default function App() {
       <img
         src="/logo.png"
         alt="Logo"
-        width={400}
-        height={400}
-        className="absolute top-[-50px]"
+        className="absolute left-1/2 -translate-x-1/2 top-4 w-32 h-32 sm:w-48 sm:h-48 md:w-72 md:h-72 object-contain"
       />
       {step === "username" && (
         <div className={`${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900"} p-6 rounded-lg shadow-lg w-full max-w-sm`}>

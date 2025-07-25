@@ -5,9 +5,10 @@ const socket = io(import.meta.env.VITE_SOCKET_URL);
 
 interface ChatProps {
   username: string;
+  theme: string;
 }
 
-export default function Chat({ username }: ChatProps) {
+export default function Chat({ username, theme }: ChatProps) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<
     { user: { username: string; id: string }; text: string; type?: string }[]
@@ -65,21 +66,23 @@ export default function Chat({ username }: ChatProps) {
     <div className="flex flex-col md:flex-row w-full max-w-4xl p-2 rounded-lg shadow-lg md:space-x-4 md:space-y-0">
       {/* Online Users List */}
       <div
-        className="md:w-1/4 bg-gray-700 p-4 rounded-lg mb-4 md:mb-0 max-h-48 md:max-h-95 overflow-y-auto"
+        className={`md:w-1/4 p-4 rounded-lg mb-4 md:mb-0 max-h-48 md:max-h-95 overflow-y-auto ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"}`}
         style={{
           scrollbarWidth: "thin",
           scrollbarColor:
-            " oklch(0.279 0.041 260.031) oklch(0.373 0.034 259.733)",
+            theme === "dark"
+              ? "oklch(0.279 0.041 260.031) oklch(0.373 0.034 259.733)"
+              : "#e5e7eb #d1d5db",
         }}
       >
-        <h3 className="text-xl text-white mb-3">
+        <h3 className={`text-xl mb-3 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
           Aktif kişiler ({onlineUsers.length})
         </h3>
-        <ul className="space-y-1 text-white">
+        <ul className={`space-y-1 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
           {onlineUsers.map((user, index) => (
             <li
               key={index}
-              className="flex items-center space-x-2 hover:bg-gray-700 p-2 rounded cursor-pointer"
+              className={`flex items-center space-x-2 p-2 rounded cursor-pointer ${theme === "dark" ? "hover:bg-gray-700" : "hover:bg-gray-300"}`}
             >
               <div className="w-3 h-3 bg-green-500 rounded-full"></div>
               <span>{user}</span>
@@ -89,21 +92,23 @@ export default function Chat({ username }: ChatProps) {
       </div>
 
       {/* Chat Container */}
-      <div className="md:w-3/4 flex flex-col bg-gray-700 p-4 rounded-lg">
-        <h2 className="text-xl text-white mb-3">Sohbet</h2>
+      <div className={`md:w-3/4 flex flex-col p-4 rounded-lg ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"}`}>
+        <h2 className={`text-xl mb-3 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Sohbet</h2>
         <div
           id="chat-container"
-          className="flex-grow h-64 overflow-y-auto bg-gray-800 p-3 rounded"
+          className={`flex-grow h-64 overflow-y-auto p-3 rounded ${theme === "dark" ? "bg-gray-800" : "bg-white"}`}
           style={{
             scrollbarWidth: "thin",
             scrollbarColor:
-              "oklch(0.373 0.034 259.733) oklch(0.279 0.041 260.031)",
+              theme === "dark"
+                ? "oklch(0.373 0.034 259.733) oklch(0.279 0.041 260.031)"
+                : "#e5e7eb #d1d5db",
           }}
         >
           {messages.map((msg, index) => (
             <p
               key={index}
-              className={`mb-2 text-white ${
+              className={`mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"} ${
                 msg.type === "system"
                   ? "text-center"
                   : msg.user.id === userId
@@ -112,17 +117,17 @@ export default function Chat({ username }: ChatProps) {
               }`}
             >
               {msg.type === "system" ? (
-                <span className="italic text-gray-400">{msg.text}</span>
+                <span className={`italic ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>{msg.text}</span>
               ) : (
                 <>
                   {msg.user.id === userId ? (
-                    <span className="bg-blue-500 rounded-lg p-2 ml-auto">
+                    <span className={`rounded-lg p-2 ml-auto ${theme === "dark" ? "bg-blue-500" : "bg-blue-400"}`}>
                       {msg.text}
                     </span>
                   ) : (
                     <div className="flex flex-col items-start">
                       <strong>{msg.user.username}</strong>
-                      <span className="bg-gray-600 rounded-lg p-2 mt-1">
+                      <span className={`rounded-lg p-2 mt-1 ${theme === "dark" ? "bg-gray-600" : "bg-gray-300"}`}>
                         {msg.text}
                       </span>
                     </div>
@@ -144,11 +149,11 @@ export default function Chat({ username }: ChatProps) {
                 sendMessage();
               }
             }}
-            className="flex-grow p-2 rounded bg-gray-800 text-white outline-none"
+            className={`flex-grow p-2 rounded outline-none ${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900 border border-gray-300"}`}
           />
           <button
             onClick={sendMessage}
-            className="ml-2 bg-blue-500 px-4 py-2 rounded hover:bg-blue-600"
+            className={`ml-2 px-4 py-2 rounded hover:bg-blue-600 ${theme === "dark" ? "bg-blue-500 text-white" : "bg-blue-400 text-white hover:bg-blue-500"}`}
           >
             Gönder
           </button>

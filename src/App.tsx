@@ -5,6 +5,7 @@ export default function App() {
   const [username, setUsername] = useState("");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [error, setError] = useState("");
+  const [theme, setTheme] = useState("dark"); // "dark" veya "light"
 
   const joinChat = () => {
     if (username.trim()) {
@@ -15,8 +16,20 @@ export default function App() {
     }
   };
 
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  };
+
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-900 text-white">
+    <div
+      className={`flex items-center justify-center h-screen ${theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900"}`}
+    >
+      <button
+        onClick={toggleTheme}
+        className={`absolute top-4 right-4 px-4 py-2 rounded shadow transition-colors duration-200 ${theme === "dark" ? "bg-gray-800 text-white hover:bg-gray-700" : "bg-gray-200 text-gray-900 hover:bg-gray-300"}`}
+      >
+        {theme === "dark" ? "Açık Tema" : "Koyu Tema"}
+      </button>
       <img
         src="/logo.png"
         alt="Logo"
@@ -25,7 +38,7 @@ export default function App() {
         className="absolute top-[-50px]"
       />
       {!isLoggedIn ? (
-        <div className="bg-gray-800 p-6 rounded-lg shadow-lg w-full max-w-sm">
+        <div className={`${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900"} p-6 rounded-lg shadow-lg w-full max-w-sm`}>
           <h2 className="text-xl mb-3 text-center">İsminizi Girin</h2>
 
           <input
@@ -33,7 +46,7 @@ export default function App() {
             placeholder="İsminiz"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full p-2 mb-3 rounded bg-gray-700 text-white outline-none"
+            className={`w-full p-2 mb-3 rounded outline-none ${theme === "dark" ? "bg-gray-700 text-white" : "bg-gray-100 text-gray-900"}`}
           />
 
           {error && <p className="text-red-500 text-center mb-3">{error}</p>}
@@ -46,7 +59,7 @@ export default function App() {
           </button>
         </div>
       ) : (
-        <Chat username={username} />
+        <Chat username={username} theme={theme} />
       )}
     </div>
   );

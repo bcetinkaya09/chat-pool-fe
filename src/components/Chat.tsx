@@ -12,7 +12,7 @@ interface ChatProps {
 export default function Chat({ username, room, theme }: ChatProps) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<
-    { user: { username: string; id: string }; text: string; type?: string }[]
+    { user: { username: string; id: string }; text: string; type?: string; time?: string }[]
   >([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [userId, setUserId] = useState<string>("");
@@ -121,18 +121,29 @@ export default function Chat({ username, room, theme }: ChatProps) {
                 }`}
               >
                 {msg.type === "system" ? (
-                  <span className={`italic ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>{msg.text}</span>
+                  <span className={`italic ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
+                    {msg.text}
+                    {msg.time && (
+                      <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
+                    )}
+                  </span>
                 ) : (
                   <>
                     {msg.user.id === userId ? (
                       <span className={`rounded-lg p-2 ml-auto ${theme === "dark" ? "bg-blue-500" : "bg-blue-400"}`}>
                         {msg.text}
+                        {msg.time && (
+                          <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
+                        )}
                       </span>
                     ) : (
                       <div className="flex flex-col items-start">
                         <strong>{msg.user.username}</strong>
                         <span className={`rounded-lg p-2 mt-1 ${theme === "dark" ? "bg-gray-600" : "bg-gray-300"}`}>
                           {msg.text}
+                          {msg.time && (
+                            <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
+                          )}
                         </span>
                       </div>
                     )}

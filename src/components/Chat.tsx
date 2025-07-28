@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import socket from "../socket";
 
 interface ChatProps {
@@ -10,13 +10,16 @@ interface ChatProps {
 export default function Chat({ username, room, theme }: ChatProps) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<
-    { user: { username: string; id: string }; text: string; type?: string; time?: string; id?: string }[]
+    { user: { username: string; id: string }; text: string; type?: string; time?: string; id?: string; readBy?: string[] }[]
   >([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
+  const [onlineUsersWithIds, setOnlineUsersWithIds] = useState<{ id: string; username: string }[]>([]);
   const [userId, setUserId] = useState<string>("");
   // Seçili mesajı tutmak için state
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<number | null>(null);
   const [pinnedMessage, setPinnedMessage] = useState<{ user: { username: string; id: string }; text: string; type?: string; time?: string; id?: string } | null>(null);
+  const [showReadDetail, setShowReadDetail] = useState<{ open: boolean; messageIndex: number | null }>({ open: false, messageIndex: null });
+  const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!username || !room) return;
@@ -51,13 +54,39 @@ export default function Chat({ username, room, theme }: ChatProps) {
       setPinnedMessage(msg);
     });
 
+    socket.on("messageReadUpdate", ({ messageId, userId }) => {
+      setMessages((prevMsgs) =>
+        prevMsgs.map((msg) =>
+          msg.id === messageId
+            ? { ...msg, readBy: msg.readBy ? [...msg.readBy, userId] : [userId] }
+            : msg
+        )
+      );
+    });
+
+    socket.on("onlineUsersWithIds", (users) => {
+      setOnlineUsersWithIds(users);
+    });
+
     return () => {
       socket.off("message", messageHandler);
       socket.off("allMessages", allMessagesHandler);
       socket.off("onlineUsers", usersHandler);
       socket.off("pinnedMessage");
+      socket.off("messageReadUpdate");
+      socket.off("onlineUsersWithIds");
     };
   }, [username, room]);
+
+  // Mesajlar okundu olarak işaretlensin
+  useEffect(() => {
+    if (!userId || !room) return;
+    messages.forEach((msg) => {
+      if (msg.id && !msg.readBy?.includes(userId)) {
+        socket.emit("messageRead", { room, messageId: msg.id, userId });
+      }
+    });
+  }, [messages, userId, room]);
 
   const sendMessage = () => {
     if (message.trim()) {
@@ -158,6 +187,7 @@ export default function Chat({ username, room, theme }: ChatProps) {
           </div>
           <div
             id="chat-container"
+            ref={chatContainerRef}
             className={`flex-grow h-64 overflow-y-auto p-3 rounded ${theme === "dark" ? "bg-gray-800" : "bg-white"}`}
             style={{
               scrollbarWidth: "thin",
@@ -200,6 +230,36 @@ export default function Chat({ username, room, theme }: ChatProps) {
                       {msg.time && (
                         <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
                       )}
+                      {/* Okundu tikleri */}
+                      {isOwn && (
+                        <span className="ml-2 align-middle">
+                          {msg.readBy && msg.readBy.length > 1 ? (
+                            // Çift tik (en az 1 kişi daha okuduysa)
+                            <svg xmlns="http://www.w3.org/2000/svg" className="inline h-4 w-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 17l4 4L23 11" />
+                            </svg>
+                          ) : (
+                            // Tek tik (sadece kendisi okuduysa)
+                            <svg xmlns="http://www.w3.org/2000/svg" className="inline h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </span>
+                      )}
+                      {/* Okundu detayı info butonu */}
+                      <button
+                        className="ml-2 align-middle text-xs text-gray-500 hover:text-blue-500"
+                        title="Kimler okudu?"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowReadDetail({ open: true, messageIndex: index });
+                        }}
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01" />
+                        </svg>
+                      </button>
                     </span>
                     {/* Pin/unpin butonu */}
                     <button
@@ -241,6 +301,41 @@ export default function Chat({ username, room, theme }: ChatProps) {
           </div>
         </div>
       </div>
+      {/* Okundu detayı modalı */}
+      {showReadDetail.open && showReadDetail.messageIndex !== null && (
+        (() => {
+          const msg = messages[showReadDetail.messageIndex!];
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-30">
+              <div className="bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-700 rounded p-4 shadow-lg min-w-[250px] max-w-[90vw]">
+                <div className="font-bold mb-2">Okundu Bilgisi</div>
+                <div>
+                  <span className="font-semibold">Okuyanlar:</span>
+                  <ul className="list-disc ml-5">
+                    {onlineUsersWithIds.filter(u => msg.readBy?.includes(u.id)).map(u => (
+                      <li key={u.id}>{u.username}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="mt-2">
+                  <span className="font-semibold">Okumayanlar:</span>
+                  <ul className="list-disc ml-5">
+                    {onlineUsersWithIds.filter(u => !(msg.readBy || []).includes(u.id)).map(u => (
+                      <li key={u.id}>{u.username}</li>
+                    ))}
+                  </ul>
+                </div>
+                <button
+                  className="mt-3 px-3 py-1 rounded bg-blue-500 text-white hover:bg-blue-600"
+                  onClick={() => setShowReadDetail({ open: false, messageIndex: null })}
+                >
+                  Kapat
+                </button>
+              </div>
+            </div>
+          );
+        })()
+      )}
     </div>
   );
 }

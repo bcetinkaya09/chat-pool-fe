@@ -16,6 +16,7 @@ export default function Chat({ username, room, theme }: ChatProps) {
   const [userId, setUserId] = useState<string>("");
   // Seçili mesajı tutmak için state
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<number | null>(null);
+  const [pinnedMessage, setPinnedMessage] = useState<{ user: { username: string; id: string }; text: string; type?: string; time?: string; id?: string } | null>(null);
 
   useEffect(() => {
     if (!username || !room) return;
@@ -46,11 +47,15 @@ export default function Chat({ username, room, theme }: ChatProps) {
     socket.on("message", messageHandler);
     socket.on("allMessages", allMessagesHandler);
     socket.on("onlineUsers", usersHandler);
+    socket.on("pinnedMessage", (msg) => {
+      setPinnedMessage(msg);
+    });
 
     return () => {
       socket.off("message", messageHandler);
       socket.off("allMessages", allMessagesHandler);
       socket.off("onlineUsers", usersHandler);
+      socket.off("pinnedMessage");
     };
   }, [username, room]);
 
@@ -88,6 +93,23 @@ export default function Chat({ username, room, theme }: ChatProps) {
   return (
     <div className="w-full flex flex-col items-center">
       <h1 className={`text-2xl font-bold mb-2 text-center ${theme === "dark" ? "text-blue-400" : "text-blue-700"}`}>{room.toUpperCase()} ODASI</h1>
+      {/* Sabitli mesaj kutusu */}
+      {pinnedMessage && (
+        <div className={`w-full max-w-4xl mb-2 p-3 rounded-lg shadow-lg border-2 flex items-center justify-between ${theme === "dark" ? "border-yellow-400 bg-yellow-900" : "border-yellow-400 bg-yellow-100"}`}>
+          <div>
+            <strong>{pinnedMessage.user?.username}:</strong> {pinnedMessage.text}
+            {pinnedMessage.time && (
+              <span className="ml-2 text-xs align-middle">[{pinnedMessage.time}]</span>
+            )}
+          </div>
+          <button
+            onClick={() => socket.emit("unpinMessage", { room })}
+            className={`ml-4 px-2 py-1 rounded ${theme === "dark" ? "bg-yellow-500 text-black hover:bg-yellow-400" : "bg-yellow-400 text-white hover:bg-yellow-500"}`}
+          >
+            Sabitlemeyi Kaldır
+          </button>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row w-full max-w-4xl p-2 rounded-lg shadow-lg md:space-x-4 md:space-y-0">
         {/* Online Users List */}
         <div
@@ -164,36 +186,30 @@ export default function Chat({ username, room, theme }: ChatProps) {
                     </span>
                   </p>
                 );
-              } else if (isOwn) {
-                return (
-                  <div
-                    key={index}
-                    className={`mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"} text-right`}
-                    onClick={() => setSelectedMessageIndex(index)}
-                    style={{ cursor: "pointer" }}
-                  >
-                    <span className={`rounded-lg p-2 ml-auto ${theme === "dark" ? "bg-blue-500" : "bg-blue-400"} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
-                      {msg.text}
-                      {msg.time && (
-                        <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
-                      )}
-                    </span>
-                  </div>
-                );
               } else {
                 return (
                   <div
                     key={index}
-                    className={`mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"} text-left`}
-                    style={{ cursor: "default" }}
+                    className={`mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"} ${isOwn ? "text-right" : "text-left"}`}
+                    onClick={isOwn ? () => setSelectedMessageIndex(index) : undefined}
+                    style={{ cursor: isOwn ? "pointer" : "default" }}
                   >
-                    <strong>{msg.user?.username}</strong>
-                    <span className={`rounded-lg p-2 mt-1 block ${theme === "dark" ? "bg-gray-600" : "bg-gray-300"} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
+                    {isOwn ? null : <strong>{msg.user?.username}</strong>}
+                    <span className={`rounded-lg p-2 ${isOwn ? "ml-auto" : "mt-1 block"} ${theme === "dark" ? (isOwn ? "bg-blue-500" : "bg-gray-600") : (isOwn ? "bg-blue-400" : "bg-gray-300")} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
                       {msg.text}
                       {msg.time && (
                         <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
                       )}
                     </span>
+                    {/* Pin/unpin butonu */}
+                    <button
+                      onClick={() => pinnedMessage && pinnedMessage.id === msg.id
+                        ? socket.emit("unpinMessage", { room })
+                        : socket.emit("pinMessage", { room, messageId: msg.id })}
+                      className={`ml-2 px-2 py-1 rounded ${pinnedMessage && pinnedMessage.id === msg.id ? "bg-yellow-400 text-white" : "bg-gray-300 text-gray-700"} hover:bg-yellow-500`}
+                    >
+                      {pinnedMessage && pinnedMessage.id === msg.id ? "Sabitlenen Mesaj" : "Sabitle"}
+                    </button>
                   </div>
                 );
               }

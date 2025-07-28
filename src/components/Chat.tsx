@@ -20,6 +20,10 @@ export default function Chat({ username, room, theme }: ChatProps) {
   const [pinnedMessage, setPinnedMessage] = useState<{ user: { username: string; id: string }; text: string; type?: string; time?: string; id?: string } | null>(null);
   const [showReadDetail, setShowReadDetail] = useState<{ open: boolean; messageIndex: number | null }>({ open: false, messageIndex: null });
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const [mentionSuggestions, setMentionSuggestions] = useState<string[]>([]);
+  const [showMentionList, setShowMentionList] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionNotify, setMentionNotify] = useState<string | null>(null);
 
   useEffect(() => {
     if (!username || !room) return;
@@ -68,6 +72,11 @@ export default function Chat({ username, room, theme }: ChatProps) {
       setOnlineUsersWithIds(users);
     });
 
+    socket.on("mentionNotify", (data) => {
+      setMentionNotify(data.text);
+      setTimeout(() => setMentionNotify(null), 4000);
+    });
+
     return () => {
       socket.off("message", messageHandler);
       socket.off("allMessages", allMessagesHandler);
@@ -75,6 +84,7 @@ export default function Chat({ username, room, theme }: ChatProps) {
       socket.off("pinnedMessage");
       socket.off("messageReadUpdate");
       socket.off("onlineUsersWithIds");
+      socket.off("mentionNotify");
     };
   }, [username, room]);
 
@@ -88,11 +98,36 @@ export default function Chat({ username, room, theme }: ChatProps) {
     });
   }, [messages, userId, room]);
 
+  // Mention autocomplete logic
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setMessage(val);
+    setSelectedMessageIndex(null);
+    // Mention suggestion
+    const match = val.match(/@([\wçğıöşüÇĞİÖŞÜ]*)$/i);
+    if (match) {
+      setMentionQuery(match[1]);
+      setShowMentionList(true);
+      setMentionSuggestions(onlineUsers.filter(u => u.toLowerCase().includes(match[1].toLowerCase())));
+    } else {
+      setShowMentionList(false);
+      setMentionQuery("");
+    }
+  };
+  const handleMentionClick = (username: string) => {
+    // @ ile başlayan kısmı tamamla
+    setMessage((prev) => prev.replace(/@([\wçğıöşüÇĞİÖŞÜ]*)$/i, `@${username} `));
+    setShowMentionList(false);
+    setMentionQuery("");
+  };
+
   const sendMessage = () => {
     if (message.trim()) {
       socket.emit("chatMessage", message);
       setMessage("");
-      setSelectedMessageIndex(null); // Mesaj gönderilince seçimi kaldır
+      setSelectedMessageIndex(null);
+      setShowMentionList(false);
+      setMentionQuery("");
     }
   };
 
@@ -226,7 +261,13 @@ export default function Chat({ username, room, theme }: ChatProps) {
                   >
                     {isOwn ? null : <strong>{msg.user?.username}</strong>}
                     <span className={`rounded-lg p-2 ${isOwn ? "ml-auto" : "mt-1 block"} ${theme === "dark" ? (isOwn ? "bg-blue-500" : "bg-gray-600") : (isOwn ? "bg-blue-400" : "bg-gray-300")} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
-                      {msg.text}
+                      {msg.text.split(/(@[\wçğıöşüÇĞİÖŞÜ]+)/gi).map((part, i) =>
+                        /^@[\wçğıöşüÇĞİÖŞÜ]+$/i.test(part) ? (
+                          <span key={i} className="text-blue-500 font-bold">{part}</span>
+                        ) : (
+                          <span key={i}>{part}</span>
+                        )
+                      )}
                       {msg.time && (
                         <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
                       )}
@@ -280,10 +321,7 @@ export default function Chat({ username, room, theme }: ChatProps) {
               type="text"
               placeholder="Mesajınızı yazın..."
               value={message}
-              onChange={(e) => {
-                setMessage(e.target.value);
-                setSelectedMessageIndex(null); // Manuel değişiklikte seçimi kaldır
-              }}
+              onChange={handleInputChange}
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
@@ -292,6 +330,26 @@ export default function Chat({ username, room, theme }: ChatProps) {
               }}
               className={`flex-grow p-2 rounded outline-none transition-all duration-150 ${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900 border border-gray-300"}`}
             />
+            {/* Mention suggestion list */}
+            {showMentionList && mentionSuggestions.length > 0 && (
+              <div className="absolute bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg mt-12 z-50 max-h-40 overflow-y-auto w-60">
+                {mentionSuggestions.map((u) => (
+                  <div
+                    key={u}
+                    className="px-3 py-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900"
+                    onClick={() => handleMentionClick(u)}
+                  >
+                    @{u}
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* Mention notification */}
+            {mentionNotify && (
+              <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-6 py-2 rounded shadow-lg z-50">
+                {mentionNotify}
+              </div>
+            )}
             <button
               onClick={sendMessage}
               className={`ml-2 px-4 py-2 rounded hover:bg-blue-600 ${theme === "dark" ? "bg-blue-500 text-white" : "bg-blue-400 text-white hover:bg-blue-500"}`}

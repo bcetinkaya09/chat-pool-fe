@@ -146,7 +146,15 @@ export default function App() {
         {/* CHAT ADIMI */}
         {step === "chat" && (
           <div className="w-full max-w-2xl" style={{maxHeight: 'calc(100vh - 180px)', overflowY: 'auto'}}>
-            <Chat username={username} room={room} theme={theme} />
+            <Chat 
+              username={username} 
+              room={room} 
+              theme={theme} 
+              onLeaveRoom={() => {
+                setStep("room");
+                setRoom("");
+              }}
+            />
           </div>
         )}
       </div>

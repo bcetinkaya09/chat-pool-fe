@@ -61,6 +61,18 @@ export default function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
+  // Genel tab başlığını ayarla
+  useEffect(() => {
+    if (step === "username") {
+      document.title = "ChatPool - Giriş";
+    } else if (step === "room") {
+      document.title = "ChatPool - Oda Seçimi";
+    } else if (step === "chat") {
+      // Chat component'i kendi başlığını ayarlayacak
+      document.title = "ChatPool";
+    }
+  }, [step]);
+
   return (
     <div
       className={`flex items-center justify-center min-h-screen overflow-y-auto ${theme === "dark" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-900"}`}

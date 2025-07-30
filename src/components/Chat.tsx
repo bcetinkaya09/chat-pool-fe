@@ -36,6 +36,10 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
   const [isWindowFocused, setIsWindowFocused] = useState(true);
   const [visibleMessages, setVisibleMessages] = useState<Set<string>>(new Set());
   const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [isTabBlinking, setIsTabBlinking] = useState(false);
+  const blinkIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const originalTitleRef = useRef<string>("");
 
   useEffect(() => {
     if (!username || !room) return;
@@ -108,17 +112,30 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       socket.off("mentionNotify");
       socket.off("typing");
       socket.off("stopTyping");
+      
+      // Interval'i temizle
+      if (blinkIntervalRef.current) {
+        clearInterval(blinkIntervalRef.current);
+        blinkIntervalRef.current = null;
+      }
     }
   }, [username, room]);
 
   // Pencere odak kontrolü
   useEffect(() => {
     const handleFocus = () => {
-      console.log('🪟 Pencere odaklandı');
       setIsWindowFocused(true);
+      
+      // Pencere odaklandığında tüm okunmamış mesajları okundu olarak işaretle
+      if (userId && room) {
+        messages.forEach((msg) => {
+          if (msg.id && msg.user?.id !== userId && !msg.readBy?.includes(userId)) {
+            socket.emit("messageRead", { room, messageId: msg.id, userId });
+          }
+        });
+      }
     };
     const handleBlur = () => {
-      console.log('🪟 Pencere odaktan çıktı');
       setIsWindowFocused(false);
     };
 
@@ -129,7 +146,85 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('blur', handleBlur);
     };
-  }, []);
+  }, [userId, room, messages]);
+
+  // Tab başlığı yanıp sönme efekti
+  useEffect(() => {
+    // Mevcut interval'i temizle
+    if (blinkIntervalRef.current) {
+      clearInterval(blinkIntervalRef.current);
+      blinkIntervalRef.current = null;
+    }
+
+    // Orijinal başlığı kaydet
+    if (!originalTitleRef.current) {
+      originalTitleRef.current = `${room.toUpperCase()} - ChatPool`;
+    }
+
+    // Okunmamış mesaj varsa ve pencere odakta değilse yanıp sön
+    if (unreadCount > 0 && !isWindowFocused) {
+      setIsTabBlinking(true);
+      let isVisible = true;
+      
+      // Mesaj sayısına göre farklı hızlar
+      const blinkSpeed = unreadCount <= 3 ? 1000 : unreadCount <= 10 ? 600 : 400;
+      
+      blinkIntervalRef.current = setInterval(() => {
+        if (isVisible) {
+          document.title = `(${unreadCount}) ${room.toUpperCase()} - ChatPool`;
+        } else {
+          // Mesaj sayısına göre farklı efektler
+          if (unreadCount === 1) {
+            document.title = `💬 Yeni mesaj! - ChatPool`;
+          } else if (unreadCount <= 5) {
+            document.title = `📱 ${unreadCount} yeni mesaj! - ChatPool`;
+          } else if (unreadCount <= 15) {
+            document.title = `🚨 ${unreadCount} yeni mesaj! - ChatPool`;
+          } else {
+            document.title = `🔥 ${unreadCount} yeni mesaj! - ChatPool`;
+          }
+        }
+        isVisible = !isVisible;
+      }, blinkSpeed);
+    } else {
+      setIsTabBlinking(false);
+      // Normal başlığı geri yükle
+      if (unreadCount > 0 && !isWindowFocused) {
+        document.title = `(${unreadCount}) ${room.toUpperCase()} - ChatPool`;
+      } else {
+        document.title = originalTitleRef.current;
+      }
+    }
+
+    // Cleanup
+    return () => {
+      if (blinkIntervalRef.current) {
+        clearInterval(blinkIntervalRef.current);
+        blinkIntervalRef.current = null;
+      }
+    };
+  }, [unreadCount, isWindowFocused, room]);
+
+  // Okunmamış mesaj sayısını hesapla ve tab başlığını güncelle
+  useEffect(() => {
+    if (!userId) return;
+    
+    // Okunmamış mesajları say (kendi mesajları hariç)
+    const unreadMessages = messages.filter(msg => 
+      msg.id && 
+      msg.user?.id !== userId && // Kendi mesajlarını sayma
+      !msg.readBy?.includes(userId) // Henüz okunmamış
+    );
+    
+    setUnreadCount(unreadMessages.length);
+    
+    // Tab başlığını güncelle (yanıp sönme efekti ayrı useEffect'te yönetiliyor)
+    if (unreadMessages.length > 0 && !isWindowFocused && !isTabBlinking) {
+      document.title = `(${unreadMessages.length}) ${room.toUpperCase()} - ChatPool`;
+    } else if (!isTabBlinking) {
+      document.title = `${room.toUpperCase()} - ChatPool`;
+    }
+  }, [messages, userId, isWindowFocused, room, isTabBlinking]);
 
   // Intersection Observer ile mesaj görünürlük kontrolü
   useEffect(() => {
@@ -142,10 +237,8 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
           if (!messageId) return;
 
           if (entry.isIntersecting) {
-            console.log(`👁️ Mesaj görünür oldu: ${messageId}`);
             setVisibleMessages(prev => new Set([...prev, messageId]));
           } else {
-            console.log(`👁️ Mesaj görünmez oldu: ${messageId}`);
             setVisibleMessages(prev => {
               const newSet = new Set(prev);
               newSet.delete(messageId);
@@ -176,7 +269,6 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
     visibleMessages.forEach((messageId) => {
       const message = messages.find(msg => msg.id === messageId);
       if (message && !message.readBy?.includes(userId)) {
-        console.log(`📖 Mesaj okundu: ${messageId} (Pencere odaklı: ${isWindowFocused})`);
         socket.emit("messageRead", { room, messageId, userId });
       }
     });
@@ -287,7 +379,17 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       >
         Odadan Çık
       </button>
-      <h1 className={`text-2xl font-bold mb-2 text-center ${theme === "dark" ? "text-blue-400" : "text-blue-700"}`}>{room.toUpperCase()} ODASI</h1>
+      <h1 className={`text-2xl font-bold mb-2 text-center ${theme === "dark" ? "text-blue-400" : "text-blue-700"}`}>
+        {room.toUpperCase()} ODASI
+        {unreadCount > 0 && !isWindowFocused && (
+          <span className={`ml-2 px-2 py-1 text-xs rounded-full font-bold animate-pulse ${theme === "dark" ? "bg-red-600 text-white" : "bg-red-500 text-white"}`}>
+            {unreadCount} {unreadCount === 1 ? 'yeni mesaj' : 'yeni mesaj'}
+            {isTabBlinking && (
+              <span className="ml-1 animate-bounce">🔔</span>
+            )}
+          </span>
+        )}
+      </h1>
       {/* Sabitli mesaj kutusu */}
       {pinnedMessage && (
         <div className={`w-full max-w-4xl mb-2 p-3 rounded-lg shadow-lg border-2 flex items-center justify-between ${theme === "dark" ? "border-yellow-400 bg-yellow-900" : "border-yellow-400 bg-yellow-100"}`}>

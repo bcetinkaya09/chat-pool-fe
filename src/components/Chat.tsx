@@ -31,6 +31,11 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
   const [emojiPickerPosition, setEmojiPickerPosition] = useState<{top: number, left: number} | null>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
+  
+  // Okundu bilgisi için yeni state'ler
+  const [isWindowFocused, setIsWindowFocused] = useState(true);
+  const [visibleMessages, setVisibleMessages] = useState<Set<string>>(new Set());
+  const messageRefs = useRef<Map<string, HTMLDivElement>>(new Map());
 
   useEffect(() => {
     if (!username || !room) return;
@@ -103,18 +108,88 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       socket.off("mentionNotify");
       socket.off("typing");
       socket.off("stopTyping");
-    };
+    }
   }, [username, room]);
 
-  // Mesajlar okundu olarak işaretlensin
+  // Pencere odak kontrolü
   useEffect(() => {
-    if (!userId || !room) return;
-    messages.forEach((msg) => {
-      if (msg.id && !msg.readBy?.includes(userId)) {
-        socket.emit("messageRead", { room, messageId: msg.id, userId });
+    const handleFocus = () => {
+      console.log('🪟 Pencere odaklandı');
+      setIsWindowFocused(true);
+    };
+    const handleBlur = () => {
+      console.log('🪟 Pencere odaktan çıktı');
+      setIsWindowFocused(false);
+    };
+
+    window.addEventListener('focus', handleFocus);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, []);
+
+  // Intersection Observer ile mesaj görünürlük kontrolü
+  useEffect(() => {
+    if (!userId || !room || !isWindowFocused) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          const messageId = entry.target.getAttribute('data-message-id');
+          if (!messageId) return;
+
+          if (entry.isIntersecting) {
+            console.log(`👁️ Mesaj görünür oldu: ${messageId}`);
+            setVisibleMessages(prev => new Set([...prev, messageId]));
+          } else {
+            console.log(`👁️ Mesaj görünmez oldu: ${messageId}`);
+            setVisibleMessages(prev => {
+              const newSet = new Set(prev);
+              newSet.delete(messageId);
+              return newSet;
+            });
+          }
+        });
+      },
+      {
+        root: chatContainerRef.current,
+        rootMargin: '0px',
+        threshold: 0.5 // Mesajın %50'si görünür olmalı
+      }
+    );
+
+    // Tüm mesaj elementlerini gözlemle
+    messageRefs.current.forEach((element) => {
+      observer.observe(element);
+    });
+
+    return () => observer.disconnect();
+  }, [messages, userId, room, isWindowFocused]);
+
+  // Görünür mesajları okundu olarak işaretle
+  useEffect(() => {
+    if (!userId || !room || !isWindowFocused) return;
+
+    visibleMessages.forEach((messageId) => {
+      const message = messages.find(msg => msg.id === messageId);
+      if (message && !message.readBy?.includes(userId)) {
+        console.log(`📖 Mesaj okundu: ${messageId} (Pencere odaklı: ${isWindowFocused})`);
+        socket.emit("messageRead", { room, messageId, userId });
       }
     });
-  }, [messages, userId, room]);
+  }, [visibleMessages, userId, room, isWindowFocused, messages]);
+
+  // Mesaj referanslarını güncelle
+  const setMessageRef = (element: HTMLDivElement | null, messageId: string) => {
+    if (element) {
+      messageRefs.current.set(messageId, element);
+    } else {
+      messageRefs.current.delete(messageId);
+    }
+  };
 
   // Mention autocomplete logic
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -310,6 +385,8 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
                   <p
                     key={index}
                     className={`mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"} text-center`}
+                    ref={el => setMessageRef(el, msg.id || index.toString())}
+                    data-message-id={msg.id || index.toString()}
                   >
                     <span className={`italic ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
                       {msg.text}
@@ -326,6 +403,8 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
                     className={`mb-2 ${theme === "dark" ? "text-white" : "text-gray-900"} ${isOwn ? "text-right" : "text-left"}`}
                     onClick={isOwn ? () => setSelectedMessageIndex(index) : undefined}
                     style={{ cursor: isOwn ? "pointer" : "default" }}
+                    ref={el => setMessageRef(el, msg.id || index.toString())}
+                    data-message-id={msg.id || index.toString()}
                   >
                     {isOwn ? null : <strong>{msg.user?.username}</strong>}
                     <span className={`rounded-lg p-2 ${isOwn ? "ml-auto" : "mt-1 block"} ${theme === "dark" ? (isOwn ? "bg-blue-500" : "bg-gray-600") : (isOwn ? "bg-blue-400" : "bg-gray-300")} ${selectedMessageIndex === index ? 'border-4 border-pink-500' : ''}`}>
@@ -365,9 +444,7 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
                           setShowReadDetail({ open: true, messageIndex: index });
                         }}
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="inline h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01" />
-                        </svg>
+                        <span className="text-lg">👁️</span>
                       </button>
                     </span>
                     {/* Pin/unpin butonu */}

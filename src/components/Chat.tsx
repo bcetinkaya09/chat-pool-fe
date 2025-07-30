@@ -23,12 +23,10 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<string[]>([]);
   const [showMentionList, setShowMentionList] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState("");
   const [mentionNotify, setMentionNotify] = useState<string | null>(null);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   let typingTimeout: NodeJS.Timeout | null = null;
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-  const [emojiPickerPosition, setEmojiPickerPosition] = useState<{top: number, left: number} | null>(null);
   const emojiButtonRef = useRef<HTMLButtonElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   
@@ -98,7 +96,7 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       if (typingTimeout) clearTimeout(typingTimeout);
       typingTimeout = setTimeout(() => setTypingUser(null), 3000);
     });
-    socket.on("stopTyping", ({ username }) => {
+    socket.on("stopTyping", () => {
       setTypingUser(null);
     });
 
@@ -297,19 +295,16 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
     // Mention suggestion
     const match = val.match(/@([\wçğıöşüÇĞİÖŞÜ]*)$/i);
     if (match) {
-      setMentionQuery(match[1]);
       setShowMentionList(true);
       setMentionSuggestions(onlineUsers.filter(u => u.toLowerCase().includes(match[1].toLowerCase())));
     } else {
       setShowMentionList(false);
-      setMentionQuery("");
     }
   };
   const handleMentionClick = (username: string) => {
     // @ ile başlayan kısmı tamamla
     setMessage((prev) => prev.replace(/@([\wçğıöşüÇĞİÖŞÜ]*)$/i, `@${username} `));
     setShowMentionList(false);
-    setMentionQuery("");
   };
 
   // Mesaj gönderildiğinde typing durdurulsun
@@ -320,7 +315,6 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       setMessage("");
       setSelectedMessageIndex(null);
       setShowMentionList(false);
-      setMentionQuery("");
     }
   };
 
@@ -622,13 +616,6 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
                 style={{ background: "none", border: "none" }}
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (emojiButtonRef.current) {
-                    const rect = emojiButtonRef.current.getBoundingClientRect();
-                    setEmojiPickerPosition({
-                      top: rect.bottom + window.scrollY + 5,
-                      left: rect.left + window.scrollX,
-                    });
-                  }
                   setShowEmojiPicker((prev) => !prev);
                 }}
               >

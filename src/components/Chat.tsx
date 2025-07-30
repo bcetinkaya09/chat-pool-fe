@@ -27,6 +27,10 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
   const [mentionNotify, setMentionNotify] = useState<string | null>(null);
   const [typingUser, setTypingUser] = useState<string | null>(null);
   let typingTimeout: NodeJS.Timeout | null = null;
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [emojiPickerPosition, setEmojiPickerPosition] = useState<{top: number, left: number} | null>(null);
+  const emojiButtonRef = useRef<HTMLButtonElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!username || !room) return;
@@ -171,6 +175,27 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       chatContainer.scrollTop = chatContainer.scrollHeight;
     }
   }, [messages]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(event.target as Node) &&
+        emojiButtonRef.current &&
+        !emojiButtonRef.current.contains(event.target as Node)
+      ) {
+        setShowEmojiPicker(false);
+      }
+    }
+    if (showEmojiPicker) {
+      document.addEventListener("mousedown", handleClickOutside);
+    } else {
+      document.removeEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showEmojiPicker]);
 
   if (!username) {
     return null;
@@ -384,6 +409,57 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
               {mentionNotify && (
                 <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-6 py-2 rounded shadow-lg z-50">
                   {mentionNotify}
+                </div>
+              )}
+              <button
+                ref={emojiButtonRef}
+                type="button"
+                className="ml-2 px-2 py-2 rounded hover:bg-gray-700 transition-all duration-150 text-2xl"
+                style={{ background: "none", border: "none" }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (emojiButtonRef.current) {
+                    const rect = emojiButtonRef.current.getBoundingClientRect();
+                    setEmojiPickerPosition({
+                      top: rect.bottom + window.scrollY + 5,
+                      left: rect.left + window.scrollX,
+                    });
+                  }
+                  setShowEmojiPicker((prev) => !prev);
+                }}
+              >
+                😂
+              </button>
+              {showEmojiPicker && (
+                <div
+                  ref={emojiPickerRef}
+                  style={{
+                    position: "absolute",
+                    top: "-60px",
+                    left: "0",
+                    zIndex: 1000,
+                    background: theme === "dark" ? "#2d3748" : "#fff",
+                    border: "1px solid #ccc",
+                    borderRadius: 8,
+                    padding: 8,
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                    display: "flex",
+                    gap: 8,
+                  }}
+                  onClick={e => e.stopPropagation()}
+                >
+                  {["😂", "😍", "😎", "🥳", "😢", "👍", "🔥", "🎉", "🤔", "😅"].map((emj) => (
+                    <span
+                      key={emj}
+                      style={{ fontSize: 24, cursor: "pointer" }}
+                      onClick={() => {
+                        setMessage((prev) => prev + emj);
+                        setShowEmojiPicker(false);
+                      }}
+                    >
+                      {emj}
+                    </span>
+                  ))}
                 </div>
               )}
               <button

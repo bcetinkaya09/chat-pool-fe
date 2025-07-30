@@ -216,11 +216,23 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       {/* Sabitli mesaj kutusu */}
       {pinnedMessage && (
         <div className={`w-full max-w-4xl mb-2 p-3 rounded-lg shadow-lg border-2 flex items-center justify-between ${theme === "dark" ? "border-yellow-400 bg-yellow-900" : "border-yellow-400 bg-yellow-100"}`}>
-          <div>
-            <strong>{pinnedMessage.user?.username}:</strong> {pinnedMessage.text}
-            {pinnedMessage.time && (
-              <span className="ml-2 text-xs align-middle">[{pinnedMessage.time}]</span>
-            )}
+          <div className="flex items-center">
+            <svg 
+              className="mr-3 w-6 h-6 text-red-500" 
+              fill="currentColor" 
+              viewBox="0 0 24 24"
+              style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.3))' }}
+            >
+              <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.9 1 3 1.9 3 3V21C3 22.1 3.9 23 5 23H19C20.1 23 21 22.1 21 21V9ZM19 21H5V3H13V9H19V21Z"/>
+              <circle cx="12" cy="4" r="1.5" fill="#FFD700"/>
+              <path d="M8 12H16V14H8V12ZM8 16H14V18H8V16Z" fill="#FFD700"/>
+            </svg>
+            <div>
+              <strong>{pinnedMessage.user?.username}:</strong> {pinnedMessage.text}
+              {pinnedMessage.time && (
+                <span className="ml-2 text-xs align-middle">[{pinnedMessage.time}]</span>
+              )}
+            </div>
           </div>
           <button
             onClick={() => socket.emit("unpinMessage", { room })}
@@ -364,8 +376,21 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
                         ? socket.emit("unpinMessage", { room })
                         : socket.emit("pinMessage", { room, messageId: msg.id })}
                       className={`ml-2 px-2 py-1 rounded ${pinnedMessage && pinnedMessage.id === msg.id ? "bg-yellow-400 text-white" : "bg-gray-300 text-gray-700"} hover:bg-yellow-500`}
+                      title={pinnedMessage && pinnedMessage.id === msg.id ? "Sabitlemeyi Kaldır" : "Mesajı Sabitle"}
                     >
-                      {pinnedMessage && pinnedMessage.id === msg.id ? "Sabitlenen Mesaj" : "Sabitle"}
+                      {pinnedMessage && pinnedMessage.id === msg.id ? (
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.9 1 3 1.9 3 3V21C3 22.1 3.9 23 5 23H19C20.1 23 21 22.1 21 21V9ZM19 21H5V3H13V9H19V21Z"/>
+                          <circle cx="12" cy="4" r="1.5" fill="#FFD700"/>
+                          <path d="M8 12H16V14H8V12ZM8 16H14V18H8V16Z" fill="#FFD700"/>
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M12 2C13.1 2 14 2.9 14 4C14 5.1 13.1 6 12 6C10.9 6 10 5.1 10 4C10 2.9 10.9 2 12 2ZM21 9V7L15 1H5C3.9 1 3 1.9 3 3V21C3 22.1 3.9 23 5 23H19C20.1 23 21 22.1 21 21V9ZM19 21H5V3H13V9H19V21Z"/>
+                          <circle cx="12" cy="4" r="1.5" fill="#FFD700"/>
+                          <path d="M8 12H16V14H8V12ZM8 16H14V18H8V16Z" fill="#FFD700"/>
+                        </svg>
+                      )}
                     </button>
                   </div>
                 );

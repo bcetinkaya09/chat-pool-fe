@@ -153,6 +153,13 @@ export default function App() {
               onLeaveRoom={() => {
                 setStep("room");
                 setRoom("");
+                // Oda listesini güncelle
+                socket.disconnect(); // Önce bağlantıyı kes
+                socket.connect(); // Sonra yeniden bağlan
+                socket.emit("getRooms");
+                socket.once("roomsList", (roomList: string[]) => {
+                  setRooms(roomList);
+                });
               }}
             />
           </div>

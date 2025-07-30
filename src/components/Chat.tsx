@@ -160,8 +160,6 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       {/* Odadan Çık Butonu */}
       <button
         onClick={() => {
-          // Socket bağlantısını kapatmak için disconnect edelim
-          socket.disconnect();
           onLeaveRoom();
         }}
         className={`absolute top-4 left-4 px-4 py-2 rounded shadow transition-colors duration-200 ${theme === "dark" ? "bg-red-700 text-white hover:bg-red-600" : "bg-red-200 text-red-900 hover:bg-red-300"}`}

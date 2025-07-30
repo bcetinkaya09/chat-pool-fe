@@ -25,6 +25,8 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
   const [showMentionList, setShowMentionList] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionNotify, setMentionNotify] = useState<string | null>(null);
+  const [typingUser, setTypingUser] = useState<string | null>(null);
+  let typingTimeout: NodeJS.Timeout | null = null;
 
   useEffect(() => {
     if (!username || !room) return;
@@ -78,6 +80,15 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       setTimeout(() => setMentionNotify(null), 4000);
     });
 
+    socket.on("typing", ({ username }) => {
+      setTypingUser(username);
+      if (typingTimeout) clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => setTypingUser(null), 3000);
+    });
+    socket.on("stopTyping", ({ username }) => {
+      setTypingUser(null);
+    });
+
     return () => {
       socket.off("message", messageHandler);
       socket.off("allMessages", allMessagesHandler);
@@ -86,6 +97,8 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       socket.off("messageReadUpdate");
       socket.off("onlineUsersWithIds");
       socket.off("mentionNotify");
+      socket.off("typing");
+      socket.off("stopTyping");
     };
   }, [username, room]);
 
@@ -104,6 +117,12 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
     const val = e.target.value;
     setMessage(val);
     setSelectedMessageIndex(null);
+    // Typing event
+    if (val.length > 0) {
+      socket.emit("typing", { room, username });
+    } else {
+      socket.emit("stopTyping", { room, username });
+    }
     // Mention suggestion
     const match = val.match(/@([\wçğıöşüÇĞİÖŞÜ]*)$/i);
     if (match) {
@@ -122,9 +141,11 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
     setMentionQuery("");
   };
 
+  // Mesaj gönderildiğinde typing durdurulsun
   const sendMessage = () => {
     if (message.trim()) {
       socket.emit("chatMessage", message);
+      socket.emit("stopTyping", { room, username });
       setMessage("");
       setSelectedMessageIndex(null);
       setShowMentionList(false);
@@ -326,46 +347,52 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
               }
             })}
           </div>
-          <div className="mt-3 flex">
-            <input
-              type="text"
-              placeholder="Mesajınızı yazın..."
-              value={message}
-              onChange={handleInputChange}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  sendMessage();
-                }
-              }}
-              className={`flex-grow p-2 rounded outline-none transition-all duration-150 ${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900 border border-gray-300"}`}
-            />
-            {/* Mention suggestion list */}
-            {showMentionList && mentionSuggestions.length > 0 && (
-              <div className="absolute bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg mt-12 z-50 max-h-40 overflow-y-auto w-60">
-                {mentionSuggestions.map((u) => (
-                  <div
-                    key={u}
-                    className="px-3 py-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900"
-                    onClick={() => handleMentionClick(u)}
-                  >
-                    @{u}
-                  </div>
-                ))}
-              </div>
-            )}
-            {/* Mention notification */}
-            {mentionNotify && (
-              <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-6 py-2 rounded shadow-lg z-50">
-                {mentionNotify}
-              </div>
-            )}
-            <button
-              onClick={sendMessage}
-              className={`ml-2 px-4 py-2 rounded hover:bg-blue-600 ${theme === "dark" ? "bg-blue-500 text-white" : "bg-blue-400 text-white hover:bg-blue-500"}`}
-            >
-              Gönder
-            </button>
+          <div className="mt-3 flex flex-col w-full">
+            <div className="relative w-full flex gap-2">
+              {typingUser && typingUser !== username && (
+                <div className="absolute left-3 -top-5 text-xs text-gray-600 bg-white px-1 rounded shadow-sm z-10" style={{ pointerEvents: 'none' }}>{typingUser} yazıyor...</div>
+              )}
+              <input
+                type="text"
+                placeholder="Mesajınızı yazın..."
+                value={message}
+                onChange={handleInputChange}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                className={`flex-grow p-2 rounded outline-none transition-all duration-150 ${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900 border border-gray-300"}`}
+                style={{ minWidth: 0 }}
+              />
+              {/* Mention suggestion list */}
+              {showMentionList && mentionSuggestions.length > 0 && (
+                <div className="absolute bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded shadow-lg mt-12 z-50 max-h-40 overflow-y-auto w-60">
+                  {mentionSuggestions.map((u) => (
+                    <div
+                      key={u}
+                      className="px-3 py-2 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900"
+                      onClick={() => handleMentionClick(u)}
+                    >
+                      @{u}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {/* Mention notification */}
+              {mentionNotify && (
+                <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-blue-500 text-white px-6 py-2 rounded shadow-lg z-50">
+                  {mentionNotify}
+                </div>
+              )}
+              <button
+                onClick={sendMessage}
+                className={`ml-2 px-4 py-2 rounded bg-blue-500 text-white hover:bg-blue-600 transition-all duration-150`}
+              >
+                Gönder
+              </button>
+            </div>
           </div>
         </div>
       </div>

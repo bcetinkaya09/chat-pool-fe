@@ -11,14 +11,17 @@ interface ChatProps {
 export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<
-    { user: { username: string; id: string }; text: string; type?: string; time?: string; id?: string; readBy?: string[] }[]
+    { user: { username: string; id: string }; text: string; type?: string; time?: string; id?: string; readBy?: string[]; edited?: boolean; editTime?: string; createdAt?: number }[]
   >([]);
   const [onlineUsers, setOnlineUsers] = useState<string[]>([]);
   const [onlineUsersWithIds, setOnlineUsersWithIds] = useState<{ id: string; username: string }[]>([]);
   const [userId, setUserId] = useState<string>("");
   // Seçili mesajı tutmak için state
   const [selectedMessageIndex, setSelectedMessageIndex] = useState<number | null>(null);
-  const [pinnedMessage, setPinnedMessage] = useState<{ user: { username: string; id: string }; text: string; type?: string; time?: string; id?: string } | null>(null);
+  const [editingMessageIndex, setEditingMessageIndex] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [editError, setEditError] = useState<string | null>(null);
+  const [pinnedMessage, setPinnedMessage] = useState<{ user: { username: string; id: string }; text: string; type?: string; time?: string; id?: string; edited?: boolean; editTime?: string; createdAt?: number } | null>(null);
   const [showReadDetail, setShowReadDetail] = useState<{ open: boolean; messageIndex: number | null }>({ open: false, messageIndex: null });
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [mentionSuggestions, setMentionSuggestions] = useState<string[]>([]);
@@ -100,6 +103,11 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       setTypingUser(null);
     });
 
+    socket.on("editError", ({ message }) => {
+      setEditError(message);
+      setTimeout(() => setEditError(null), 4000);
+    });
+
     return () => {
       socket.off("message", messageHandler);
       socket.off("allMessages", allMessagesHandler);
@@ -110,6 +118,7 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
       socket.off("mentionNotify");
       socket.off("typing");
       socket.off("stopTyping");
+      socket.off("editError");
       
       // Interval'i temizle
       if (blinkIntervalRef.current) {
@@ -330,6 +339,47 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
     }
   };
 
+  // Mesaj düzenleme modunu başlat
+  const startEditing = (index: number) => {
+    const msg = messages[index];
+    if (msg && msg.id) {
+      // Mesajın 1 dakika içinde gönderilip gönderilmediğini kontrol et
+      const messageTime = msg.createdAt || parseInt(msg.id.split('-')[1]);
+      const currentTime = Date.now();
+      const timeDifference = currentTime - messageTime;
+      
+      console.log(`Frontend - Mesaj:`, msg);
+      console.log(`Frontend - Mesaj zamanı: ${messageTime}, Şu anki zaman: ${currentTime}, Fark: ${timeDifference}ms`);
+      
+      if (timeDifference <= 300000) { // 5 dakika içinde (test için)
+        setEditingMessageIndex(index);
+        setEditText(msg.text);
+        setSelectedMessageIndex(null);
+      } else {
+        setEditError(`Mesajı düzenlemek için çok geç! Sadece 1 dakika içinde düzenleyebilirsiniz. (Geçen süre: ${Math.floor(timeDifference/1000)} saniye)`);
+        setTimeout(() => setEditError(null), 4000);
+      }
+    }
+  };
+
+  // Mesaj düzenlemeyi iptal et
+  const cancelEditing = () => {
+    setEditingMessageIndex(null);
+    setEditText("");
+  };
+
+  // Mesaj düzenlemeyi kaydet
+  const saveEdit = () => {
+    if (editingMessageIndex !== null && editText.trim()) {
+      const msg = messages[editingMessageIndex];
+      if (msg && msg.id) {
+        socket.emit("editMessage", { room, messageId: msg.id, newText: editText.trim() });
+      }
+      setEditingMessageIndex(null);
+      setEditText("");
+    }
+  };
+
   useEffect(() => {
     const chatContainer = document.getElementById("chat-container");
     if (chatContainer) {
@@ -445,18 +495,30 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
         <div className={`md:w-3/4 flex flex-col p-4 rounded-lg ${theme === "dark" ? "bg-gray-700" : "bg-gray-200"}`}>
           <div className="flex items-center justify-between mb-3">
             <h2 className={`text-xl ${theme === "dark" ? "text-white" : "text-gray-900"}`}>Sohbet</h2>
-            {/* Sil butonu sağ üstte, sadece kendi mesajım seçiliyse */}
+            {/* Sil ve Düzenle butonları sağ üstte, sadece kendi mesajım seçiliyse */}
             {selectedMessageIndex !== null && messages[selectedMessageIndex]?.user.id === userId && (
-              <button
-                onClick={deleteMessage}
-                className={`flex items-center gap-2 px-3 py-1 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold shadow-md transition-transform duration-150 hover:scale-105 hover:from-red-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-red-400 ml-2`}
-                title="Mesajı sil"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m5 0H6" />
-                </svg>
-                Sil
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => startEditing(selectedMessageIndex)}
+                  className={`flex items-center gap-2 px-3 py-1 rounded-lg bg-gradient-to-r from-blue-500 to-purple-500 text-white font-semibold shadow-md transition-transform duration-150 hover:scale-105 hover:from-blue-600 hover:to-purple-600 focus:outline-none focus:ring-2 focus:ring-blue-400`}
+                  title="Mesajı düzenle"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Düzenle
+                </button>
+                <button
+                  onClick={deleteMessage}
+                  className={`flex items-center gap-2 px-3 py-1 rounded-lg bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold shadow-md transition-transform duration-150 hover:scale-105 hover:from-red-600 hover:to-pink-600 focus:outline-none focus:ring-2 focus:ring-red-400`}
+                  title="Mesajı sil"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3m5 0H6" />
+                  </svg>
+                  Sil
+                </button>
+              </div>
             )}
           </div>
           <div
@@ -513,6 +575,9 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
                       )}
                       {msg.time && (
                         <span className="ml-2 text-xs align-middle">[{msg.time}]</span>
+                      )}
+                      {msg.edited && (
+                        <span className="ml-2 text-xs text-gray-500 italic">(düzenlendi {msg.editTime && `[${msg.editTime}]`})</span>
                       )}
                       {/* Okundu tikleri */}
                       {isOwn && (
@@ -571,6 +636,47 @@ export default function Chat({ username, room, theme, onLeaveRoom }: ChatProps) 
             })}
           </div>
           <div className="mt-3 flex flex-col w-full">
+            {/* Düzenleme hata mesajı */}
+            {editError && (
+              <div className="mb-2 p-2 bg-red-100 border border-red-400 text-red-700 rounded">
+                {editError}
+              </div>
+            )}
+            {/* Mesaj düzenleme alanı */}
+            {editingMessageIndex !== null && (
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="text-sm text-blue-600 mb-2">Mesajı düzenliyorsunuz:</div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={editText}
+                    onChange={(e) => setEditText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        saveEdit();
+                      } else if (e.key === "Escape") {
+                        cancelEditing();
+                      }
+                    }}
+                    className={`flex-grow p-2 rounded outline-none transition-all duration-150 ${theme === "dark" ? "bg-gray-800 text-white" : "bg-white text-gray-900 border border-gray-300"}`}
+                    autoFocus
+                  />
+                  <button
+                    onClick={saveEdit}
+                    className="px-3 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors"
+                  >
+                    Kaydet
+                  </button>
+                  <button
+                    onClick={cancelEditing}
+                    className="px-3 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition-colors"
+                  >
+                    İptal
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="relative w-full flex gap-2">
               {typingUser && typingUser !== username && (
                 <div className="absolute left-3 -top-5 text-xs text-gray-600 bg-white px-1 rounded shadow-sm z-10" style={{ pointerEvents: 'none' }}>{typingUser} yazıyor...</div>
